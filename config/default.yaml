@@ -1,0 +1,74 @@
+rules:
+  self_referral:
+    enabled: true
+    weight: 10
+    description: "Manager listed as their own referrer"
+
+  cross_referral:
+    enabled: true
+    weight: 7
+    description: "Employee referring under another employee's management"
+
+  batch_referral:
+    enabled: true
+    weight: 6
+    threshold: 4
+    description: "Same referrer, same day, high volume"
+
+  surname_match:
+    enabled: true
+    weight: 3
+    min_surname_length: 3
+    description: "Referrer and account holder share last name"
+
+  duplicate_account:
+    enabled: true
+    weight: 8
+    similarity_threshold: 0.85
+    description: "Same account holder referred multiple times"
+
+  missing_code:
+    enabled: true
+    weight: 2
+    none_values: ["NONE", "none", ""]
+    manager_threshold: 0.80
+    description: "Missing or NONE referral code"
+
+  name_variant:
+    enabled: true
+    weight: 8
+    similarity_threshold: 0.75
+    description: "Same person using name variants as referrer"
+
+  reciprocal_pair:
+    enabled: true
+    weight: 6
+    description: "A refers B AND B refers A"
+
+  employee_as_account:
+    enabled: true
+    weight: 9
+    description: "Employee (manager) appearing as an account holder"
+
+  data_quality:
+    enabled: true
+    weight: 4
+    checks:
+      single_name: true
+      email_as_name: true
+      number_as_name: true
+      concatenated_name: true
+      business_name_keywords: ["LLC", "INC", "CORP", "SERVICES", "RENTALS", "SERVICE"]
+    description: "Data quality issues suggesting fabricated entries"
+
+  ring_detection:
+    enabled: true
+    weight: 9
+    min_ring_size: 2
+    description: "Multi-employee referral rings"
+
+scoring:
+  low_risk: 0
+  medium_risk: 10
+  high_risk: 25
+  critical_risk: 50
