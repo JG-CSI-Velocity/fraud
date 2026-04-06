@@ -11,7 +11,7 @@ No APIs, no cloud services, no internet required. Runs entirely offline.
 
 ## Installation
 
-```bash
+```cmd
 git clone https://github.com/JG-CSI-Velocity/fraud.git
 cd fraud
 pip install openpyxl pyyaml rapidfuzz
@@ -20,6 +20,16 @@ pip install openpyxl pyyaml rapidfuzz
 ## Quick Start (Full Pipeline)
 
 The easiest way to run the tool is the pipeline runner. Create a folder for your client, drop in the data file, and run:
+
+**Windows (Command Prompt):**
+
+```cmd
+mkdir clients\acme
+copy "C:\path\to\referral-data.xlsx" clients\acme\
+python run.py clients\acme\
+```
+
+**Mac/Linux:**
 
 ```bash
 mkdir -p clients/acme
@@ -35,8 +45,8 @@ The pipeline will:
 
 To re-run later with the same config:
 
-```bash
-python run.py clients/acme/ --rerun
+```cmd
+python run.py clients\acme\ --rerun
 ```
 
 ### Standalone Config Generator
