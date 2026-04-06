@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Interactive client YAML config generator.
+"""Standalone client YAML config generator.
 
-Reads column headers from a client's Excel or CSV file and walks you
-through mapping them to the screener's expected fields.
+Reads column headers from a client's Excel or CSV file, auto-detects
+column mappings, and lets you confirm or adjust before saving.
+
+For the full pipeline (config + screening in one step), use run.py instead.
 """
 
 import argparse
@@ -13,15 +15,28 @@ from pathlib import Path
 import openpyxl
 import yaml
 
-
-REQUIRED_FIELDS = {
-    "manager": "Employee or manager who owns the account",
-    "account_holder": "Person who was referred (new member)",
-    "referrer": "Person who made the referral",
+# Same auto-match keywords as run.py
+AUTO_MATCH = {
+    "manager": ["purchase manager", "manager", "employee", "staff", "rep name"],
+    "account_holder": ["account holder", "account name", "new member", "member name", "customer"],
+    "referrer": ["referrer", "referred by", "referral name", "referring"],
+    "row_number": ["row", "#"],
+    "branch_number": ["branch number", "branch num", "branch id", "branch #"],
+    "branch_name": ["branch name", "branch"],
+    "issue_date": ["issue date", "date", "created"],
+    "certificate_id": ["certificate", "cert id", "tracking id", "cert"],
+    "referral_code": ["referral code", "ref code", "code"],
+    "program_name": ["program name", "program"],
+    "product_count": ["product count", "products", "# products"],
 }
 
-OPTIONAL_FIELDS = {
-    "row_number": "Row number or ID column",
+REQUIRED_FIELDS = ["manager", "account_holder", "referrer"]
+
+FIELD_DESCRIPTIONS = {
+    "manager": "Employee/manager who owns the account",
+    "account_holder": "Person who was referred (new member)",
+    "referrer": "Person who made the referral",
+    "row_number": "Row number or ID",
     "branch_number": "Branch ID or number",
     "branch_name": "Branch name",
     "issue_date": "Date the referral was issued",
@@ -32,7 +47,7 @@ OPTIONAL_FIELDS = {
 }
 
 
-def read_headers(file_path: str, sheet_name: str = None) -> list[str]:
+def read_headers(file_path: str, sheet_name: str = None):
     path = Path(file_path)
     if path.suffix.lower() in (".xlsx", ".xls"):
         wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
@@ -54,37 +69,22 @@ def read_headers(file_path: str, sheet_name: str = None) -> list[str]:
         sys.exit(1)
 
 
-def display_headers(headers: list[str]):
-    print("\nColumns found in your file:")
-    print("-" * 50)
-    for i, h in enumerate(headers, 1):
-        display = h if h else "(empty)"
-        print(f"  {i:3d}. {display}")
-    print()
+def auto_match_columns(headers: list[str]) -> dict[str, str]:
+    matches = {}
+    used_headers = set()
+    header_lower = [(h or "").strip().lower() for h in headers]
 
+    for field, patterns in AUTO_MATCH.items():
+        for pattern in patterns:
+            for i, h in enumerate(header_lower):
+                if h and h not in used_headers and pattern in h:
+                    matches[field] = headers[i]
+                    used_headers.add(h)
+                    break
+            if field in matches:
+                break
 
-def prompt_mapping(headers: list[str], field_name: str, description: str, required: bool) -> str | None:
-    label = "REQUIRED" if required else "optional"
-    print(f"  [{label}] {field_name}: {description}")
-    print(f"    Enter column number (1-{len(headers)}), or press Enter to skip: ", end="")
-
-    while True:
-        choice = input().strip()
-        if not choice:
-            if required:
-                print(f"    This field is required. Enter a column number: ", end="")
-                continue
-            return None
-        try:
-            idx = int(choice)
-            if 1 <= idx <= len(headers):
-                header = headers[idx - 1]
-                print(f"    -> Mapped to: \"{header}\"")
-                return header
-            else:
-                print(f"    Invalid. Enter 1-{len(headers)}: ", end="")
-        except ValueError:
-            print(f"    Enter a number or press Enter to skip: ", end="")
+    return matches
 
 
 def main():
@@ -93,6 +93,7 @@ def main():
     )
     parser.add_argument("input_file", help="Path to the client's Excel or CSV file")
     parser.add_argument("--sheet", help="Excel sheet name (defaults to active sheet)")
+    parser.add_argument("--output", "-o", help="Output YAML path (default: config/<client>.yaml)")
     args = parser.parse_args()
 
     if not Path(args.input_file).exists():
@@ -100,61 +101,123 @@ def main():
         sys.exit(1)
 
     headers, detected_sheet = read_headers(args.input_file, args.sheet)
-    display_headers(headers)
 
-    print("Enter client details:")
-    print("  Client name: ", end="")
+    # Show columns
+    print(f"\nColumns found in your file:")
+    print("-" * 50)
+    for i, h in enumerate(headers, 1):
+        print(f"  {i:3d}. {h if h else '(empty)'}")
+
+    # Auto-match
+    matches = auto_match_columns(headers)
+
+    # Show results
+    print(f"\n{'=' * 50}")
+    print("AUTO-DETECTED COLUMN MAPPING")
+    print("=" * 50)
+
+    all_fields = list(FIELD_DESCRIPTIONS.keys())
+    unmatched_required = []
+
+    for field in all_fields:
+        req = field in REQUIRED_FIELDS
+        tag = "REQUIRED" if req else "optional"
+        if field in matches:
+            print(f"  [{tag}] {field} -> \"{matches[field]}\"")
+        elif req:
+            print(f"  [{tag}] {field} -> NOT FOUND")
+            unmatched_required.append(field)
+
+    # Handle unmatched required fields
+    if unmatched_required:
+        print(f"\nManual mapping needed for: {', '.join(unmatched_required)}")
+        for field in unmatched_required:
+            desc = FIELD_DESCRIPTIONS[field]
+            print(f"  {field} ({desc})")
+            print(f"    Enter column number (1-{len(headers)}): ", end="")
+            while True:
+                choice = input().strip()
+                try:
+                    idx = int(choice)
+                    if 1 <= idx <= len(headers):
+                        matches[field] = headers[idx - 1]
+                        print(f"    -> \"{headers[idx - 1]}\"")
+                        break
+                    else:
+                        print(f"    Enter 1-{len(headers)}: ", end="")
+                except ValueError:
+                    print(f"    Enter a number: ", end="")
+
+    # Confirm or fix
+    print(f"\nAccept this mapping? [Y/n]: ", end="")
+    choice = input().strip().lower()
+
+    if choice in ("n", "no"):
+        print("\nFix mappings (enter column number, or Enter to keep):")
+        for field in all_fields:
+            current = matches.get(field)
+            req = field in REQUIRED_FIELDS
+            tag = "REQUIRED" if req else "optional"
+            current_display = f" (current: \"{current}\")" if current else " (not set)"
+            print(f"  [{tag}] {field}{current_display}: ", end="")
+
+            while True:
+                val = input().strip()
+                if not val:
+                    break
+                try:
+                    idx = int(val)
+                    if 1 <= idx <= len(headers):
+                        matches[field] = headers[idx - 1]
+                        print(f"    -> \"{headers[idx - 1]}\"")
+                        break
+                    else:
+                        print(f"    Enter 1-{len(headers)} or Enter to keep: ", end="")
+                except ValueError:
+                    print(f"    Enter a number or Enter to keep: ", end="")
+
+    # Client info
+    print(f"\nClient name: ", end="")
     client_name = input().strip()
-    print("  Program name: ", end="")
+    print("Program name: ", end="")
     program_name = input().strip()
-    print(f"  Dollar value per referral [25.00]: ", end="")
+    print("Dollar value per referral [25.00]: ", end="")
     dollar_input = input().strip()
     dollar_value = float(dollar_input) if dollar_input else 25.00
 
-    print("\nMap your columns to screener fields:")
-    print("=" * 50)
-
-    columns = {}
-
-    for field, desc in REQUIRED_FIELDS.items():
-        result = prompt_mapping(headers, field, desc, required=True)
-        if result:
-            columns[field] = result
-
-    print()
-
-    for field, desc in OPTIONAL_FIELDS.items():
-        result = prompt_mapping(headers, field, desc, required=False)
-        if result:
-            columns[field] = result
-
-    print(f"\n  Employee tracking column (separate column number, or Enter to skip): ", end="")
-    emp_input = input().strip()
-    emp_col = int(emp_input) if emp_input else None
-
+    # Build config
+    columns = {k: v for k, v in matches.items() if v}
     config = {
         "client": client_name,
         "program": program_name,
         "columns": columns,
         "dollar_value_per_referral": dollar_value,
     }
-
     if detected_sheet:
         config["sheet"] = detected_sheet
-    if emp_col:
-        config["employee_tracking_column"] = emp_col
 
-    slug = client_name.lower().replace(" ", "-").replace("'", "")
-    slug = "".join(c for c in slug if c.isalnum() or c == "-")
-    output_path = Path("config") / f"{slug}.yaml"
+    # Output path
+    if args.output:
+        output_path = Path(args.output)
+    else:
+        slug = client_name.lower().replace(" ", "-").replace("'", "")
+        slug = "".join(c for c in slug if c.isalnum() or c == "-")
+        output_path = Path("config") / f"{slug}.yaml"
 
+    # Final summary
     print(f"\n{'=' * 50}")
-    print("Generated config:")
-    print("-" * 50)
-    yaml_output = yaml.dump(config, default_flow_style=False, sort_keys=False)
-    print(yaml_output)
+    print("FINAL CONFIG")
+    print("=" * 50)
+    print(f"  Client:     {client_name}")
+    print(f"  Program:    {program_name}")
+    print(f"  $/Referral: {dollar_value}")
+    print(f"\n  Column mappings:")
+    for field, header in columns.items():
+        req = "*" if field in REQUIRED_FIELDS else " "
+        print(f"   {req} {field:20s} -> \"{header}\"")
+    print(f"\n  * = required")
 
-    print(f"Save to {output_path}? [Y/n]: ", end="")
+    print(f"\nSave to {output_path}? [Y/n]: ", end="")
     confirm = input().strip().lower()
     if confirm in ("", "y", "yes"):
         output_path.parent.mkdir(exist_ok=True)
