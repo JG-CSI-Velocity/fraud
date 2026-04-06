@@ -17,13 +17,41 @@ cd fraud
 pip install openpyxl pyyaml rapidfuzz
 ```
 
-## Usage
+## Quick Start (Full Pipeline)
+
+The easiest way to run the tool is the pipeline runner. Create a folder for your client, drop in the data file, and run:
+
+```bash
+mkdir -p clients/acme
+cp /path/to/referral-data.xlsx clients/acme/
+python run.py clients/acme/
+```
+
+The pipeline will:
+1. Find the Excel/CSV file in the folder
+2. Show you the column headers and walk you through mapping them
+3. Save a `config.yaml` in the client folder
+4. Run the screener and save the report in the same folder
+
+To re-run later with the same config:
+
+```bash
+python run.py clients/acme/ --rerun
+```
+
+### Standalone Config Generator
+
+To create a config file without running the screener:
+
+```bash
+python setup_client.py /path/to/data.xlsx
+```
+
+### Direct Screener Usage
 
 ```bash
 python screen.py <input_file> --config <config_file> [--output <output_file>] [--quiet]
 ```
-
-### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
@@ -32,11 +60,8 @@ python screen.py <input_file> --config <config_file> [--output <output_file>] [-
 | `--output, -o` | No | Output report path (defaults to `<input>_fraud_report.xlsx`) |
 | `--quiet, -q` | No | Suppress progress output |
 
-### Example
-
 ```bash
 python screen.py referrals.xlsx --config config/acme.yaml
-python screen.py referrals.csv --config config/acme.yaml --output report.xlsx
 ```
 
 ## Configuration
@@ -120,9 +145,16 @@ The tool generates an Excel report with:
 
 ```
 fraud/
-  screen.py              # CLI entry point
+  run.py                 # Full pipeline runner (recommended)
+  setup_client.py        # Standalone config generator
+  screen.py              # Screener CLI
   config/
     default.yaml         # Default rules and scoring config
+  clients/               # Client folders (gitignored)
+    acme/
+      data.xlsx          # Client data file
+      config.yaml        # Generated config
+      data_fraud_report.xlsx  # Output report
   screener/
     __init__.py
     loader.py            # Excel/CSV loading and column mapping
