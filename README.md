@@ -12,6 +12,7 @@ No APIs, no cloud services, no internet required. Runs entirely offline.
 ## Installation
 
 ```cmd
+cd C:\Users\james.gilmore
 git clone https://github.com/JG-CSI-Velocity/fraud.git
 cd fraud
 pip install openpyxl pyyaml rapidfuzz
@@ -19,12 +20,12 @@ pip install openpyxl pyyaml rapidfuzz
 
 ## Quick Start (Full Pipeline)
 
-The easiest way to run the tool is the pipeline runner. Create a folder for your client, drop in the data file, and run:
+The easiest way to run the tool is the pipeline runner. Create a folder for your client, copy in the data file, and run:
 
 ```cmd
-mkdir clients\acme
-copy "C:\path\to\referral-data.xlsx" clients\acme\
-python run.py clients\acme\
+mkdir clients\coasthills
+copy "C:\Users\james.gilmore\CoastHills-Referrals by Branch.csv" clients\coasthills\
+python run.py clients\coasthills\
 ```
 
 The pipeline will:
@@ -37,7 +38,7 @@ The pipeline will:
 To re-run later with the same config:
 
 ```cmd
-python run.py clients\acme\ --rerun
+python run.py clients\coasthills\ --rerun
 ```
 
 ### Standalone Config Generator
@@ -45,7 +46,7 @@ python run.py clients\acme\ --rerun
 To create a config file without running the screener:
 
 ```cmd
-python setup_client.py C:\path\to\data.xlsx
+python setup_client.py C:\Users\james.gilmore\data.xlsx
 ```
 
 ### Direct Screener Usage
@@ -62,7 +63,7 @@ python screen.py <input_file> --config <config_file> [--output <output_file>] [-
 | `--quiet, -q` | No | Suppress progress output |
 
 ```cmd
-python screen.py referrals.xlsx --config config\acme.yaml
+python screen.py referrals.xlsx --config clients\coasthills\config.yaml
 ```
 
 ## Configuration
