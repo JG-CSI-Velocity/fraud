@@ -24,7 +24,7 @@ class BatchReferralRule(Rule):
             if len(recs) >= threshold:
                 rows = [r["_source_row"] for r in recs]
                 accounts = [str(r.get("account_holder", "")) for r in recs]
-                managers = list(set(str(r.get("manager", "")) for r in recs))
+                managers = list(set(normalize_name(r.get("manager")) for r in recs))
                 findings.append(Finding(
                     rule_name=self.name,
                     severity="high" if len(recs) >= 10 else "medium",

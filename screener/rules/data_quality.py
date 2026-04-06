@@ -47,7 +47,7 @@ class DataQualityRule(Rule):
                     severity="medium" if len(issues) > 1 else "low",
                     row_numbers=[rec["_source_row"]],
                     referrer=normalize_name(rec.get("referrer")),
-                    manager=str(rec.get("manager", "")),
+                    manager=normalize_name(rec.get("manager")),
                     branch=str(rec.get("branch_name", "")),
                     description=f"Data quality issue in '{acct_str}': {', '.join(issues)}",
                     evidence={

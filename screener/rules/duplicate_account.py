@@ -30,7 +30,7 @@ class DuplicateAccountRule(Rule):
                     severity="high" if len(recs) >= 3 else "medium",
                     row_numbers=rows,
                     referrer=", ".join(set(referrers)),
-                    manager=str(recs[0].get("manager", "")),
+                    manager=normalize_name(recs[0].get("manager")),
                     branch=str(recs[0].get("branch_name", "")),
                     description=f"'{acct_name}' referred {len(recs)} times",
                     evidence={

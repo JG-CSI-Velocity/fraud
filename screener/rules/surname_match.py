@@ -29,7 +29,7 @@ class SurnameMatchRule(Rule):
                     severity="low",
                     row_numbers=[rec["_source_row"]],
                     referrer=ref,
-                    manager=str(rec.get("manager", "")),
+                    manager=normalize_name(rec.get("manager")),
                     branch=str(rec.get("branch_name", "")),
                     description=f"Referrer '{ref}' and account holder '{acct}' share surname '{ref_surname}'",
                     evidence={
