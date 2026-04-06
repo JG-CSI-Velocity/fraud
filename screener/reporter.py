@@ -48,6 +48,7 @@ def generate_report(
     _write_referrer_scorecard(wb.create_sheet("Referrer Scorecard"), scores, config)
     _write_manager_scorecard(wb.create_sheet("Manager Scorecard"), scores, config, records)
     _write_branch_scorecard(wb.create_sheet("Branch Scorecard"), scores, config)
+    _write_branch_breakdown(wb.create_sheet("Branch Breakdown"), findings)
     _write_flagged_records(wb.create_sheet("Flagged Records"), findings)
     _write_rule_findings(wb.create_sheet("Self-Referrals"), findings, "Self-Referral")
     _write_rule_findings(wb.create_sheet("Batch Events"), findings, "Batch Referral")
@@ -320,6 +321,42 @@ def _write_branch_scorecard(ws, scores, config):
         tier_cell.fill = TIER_FILLS.get(data["tier"], PatternFill())
         ws.cell(row=row_idx, column=4, value=", ".join(sorted(data["rules_hit"])))
         ws.cell(row=row_idx, column=5, value=len(data["findings"]))
+
+    _auto_width(ws)
+
+
+def _write_branch_breakdown(ws, findings):
+    """Per-branch counts broken out by rule."""
+    branch_rules = defaultdict(lambda: defaultdict(int))
+    all_rules = set()
+
+    for f in findings:
+        branch = f.branch.strip() if f.branch else ""
+        if not branch:
+            continue
+        for br in branch.split(", "):
+            br = br.strip()
+            if br:
+                branch_rules[br][f.rule_name] += 1
+                all_rules.add(f.rule_name)
+
+    rule_list = sorted(all_rules)
+    headers = ["Branch"] + rule_list + ["Total Findings"]
+    _add_header_row(ws, headers)
+
+    sorted_branches = sorted(
+        branch_rules.items(),
+        key=lambda x: -sum(x[1].values()),
+    )
+
+    for row_idx, (branch, counts) in enumerate(sorted_branches, 2):
+        ws.cell(row=row_idx, column=1, value=branch)
+        total = 0
+        for col_idx, rule in enumerate(rule_list, 2):
+            count = counts.get(rule, 0)
+            ws.cell(row=row_idx, column=col_idx, value=count if count else "")
+            total += count
+        ws.cell(row=row_idx, column=len(rule_list) + 2, value=total)
 
     _auto_width(ws)
 
