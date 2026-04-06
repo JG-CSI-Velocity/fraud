@@ -33,9 +33,9 @@ AUTO_MATCH = {
 REQUIRED_FIELDS = ["manager", "account_holder", "referrer"]
 
 FIELD_DESCRIPTIONS = {
-    "manager": "Employee/manager who owns the account",
-    "account_holder": "Person who was referred (new member)",
-    "referrer": "Person who made the referral",
+    "manager": "Employee who set up the referral",
+    "account_holder": "Person who was referred",
+    "referrer": "Person who referred them",
     "row_number": "Row number or ID",
     "branch_number": "Branch ID or number",
     "branch_name": "Branch name",
