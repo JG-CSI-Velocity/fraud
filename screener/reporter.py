@@ -25,6 +25,15 @@ HEADER_FONT = Font(bold=True, size=11)
 HEADER_FILL = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
 HEADER_FONT_WHITE = Font(bold=True, size=11, color="FFFFFF")
 
+# Rules that indicate employees gaming the system
+EMPLOYEE_GAMING_RULES = {
+    "Self-Referral",
+    "Cross-Referral",
+    "Employee as Account",
+    "Ring Detection",
+    "Reciprocal Pair",
+}
+
 
 def generate_report(
     findings: list[Finding],
@@ -35,6 +44,7 @@ def generate_report(
 ):
     wb = Workbook()
     _write_executive_summary(wb.active, findings, scores, config, records)
+    _write_employee_gaming(wb.create_sheet("Employee Gaming"), findings, scores, config, records)
     _write_referrer_scorecard(wb.create_sheet("Referrer Scorecard"), scores, config)
     _write_manager_scorecard(wb.create_sheet("Manager Scorecard"), scores, config, records)
     _write_branch_scorecard(wb.create_sheet("Branch Scorecard"), scores, config)
@@ -78,6 +88,12 @@ def _write_executive_summary(ws, findings, scores, config, records):
     for f in findings:
         flagged_rows.update(f.row_numbers)
 
+    # Separate employee gaming findings
+    gaming_findings = [f for f in findings if f.rule_name in EMPLOYEE_GAMING_RULES]
+    gaming_rows = set()
+    for f in gaming_findings:
+        gaming_rows.update(f.row_numbers)
+
     rule_counts = defaultdict(int)
     for f in findings:
         rule_counts[f.rule_name] += 1
@@ -97,9 +113,16 @@ def _write_executive_summary(ws, findings, scores, config, records):
     metrics = [
         ("Total Records Screened", total_records),
         ("Total Findings", total_findings),
+        ("", ""),
+        ("EMPLOYEE GAMING INDICATORS", ""),
+        ("Employee Gaming Findings", len(gaming_findings)),
+        ("Rows with Employee Gaming Flags", len(gaming_rows)),
+        ("Employee Gaming Exposure", f"${len(gaming_rows) * dollar:,.0f}"),
+        ("", ""),
+        ("ALL FINDINGS", ""),
         ("Unique Rows Flagged", len(flagged_rows)),
         ("Flag Rate", f"{len(flagged_rows)/total_records*100:.1f}%" if total_records else "0%"),
-        ("Estimated Exposure (flagged rows)", f"${len(flagged_rows) * dollar:,.0f}"),
+        ("Total Estimated Exposure", f"${len(flagged_rows) * dollar:,.0f}"),
         ("", ""),
         ("Critical Findings", severity_counts.get("critical", 0)),
         ("High Findings", severity_counts.get("high", 0)),
@@ -108,15 +131,19 @@ def _write_executive_summary(ws, findings, scores, config, records):
     ]
 
     for i, (label, value) in enumerate(metrics, 1):
-        ws.cell(row=row + i, column=1, value=label)
+        cell = ws.cell(row=row + i, column=1, value=label)
         ws.cell(row=row + i, column=2, value=value)
+        if label in ("EMPLOYEE GAMING INDICATORS", "ALL FINDINGS"):
+            cell.font = HEADER_FONT
 
     row = row + len(metrics) + 3
     ws.cell(row=row, column=1, value="Findings by Rule").font = HEADER_FONT
     row += 1
     for rule, count in sorted(rule_counts.items(), key=lambda x: -x[1]):
-        ws.cell(row=row, column=1, value=rule)
+        cell = ws.cell(row=row, column=1, value=rule)
         ws.cell(row=row, column=2, value=count)
+        if rule in EMPLOYEE_GAMING_RULES:
+            cell.font = Font(bold=True)
         row += 1
 
     row += 2
@@ -142,6 +169,78 @@ def _add_header_row_at(ws, row, headers):
         cell = ws.cell(row=row, column=col, value=header)
         cell.font = HEADER_FONT_WHITE
         cell.fill = HEADER_FILL
+
+
+def _write_employee_gaming(ws, findings, scores, config, records):
+    """Consolidated view of all employee gaming indicators."""
+    from .normalizer import normalize_name
+
+    dollar = config.get("dollar_value_per_referral", 25)
+    gaming = [f for f in findings if f.rule_name in EMPLOYEE_GAMING_RULES]
+
+    ws.cell(row=1, column=1, value="Employee Gaming Summary").font = Font(bold=True, size=14)
+    ws.cell(row=2, column=1, value="Findings where employees may be gaming the referral program")
+
+    # Summary counts by rule
+    row = 4
+    ws.cell(row=row, column=1, value="Rule").font = HEADER_FONT
+    ws.cell(row=row, column=2, value="Count").font = HEADER_FONT
+    ws.cell(row=row, column=3, value="What It Means").font = HEADER_FONT
+
+    rule_explanations = {
+        "Self-Referral": "Employee listed themselves as the referrer",
+        "Cross-Referral": "Employee referring accounts under another employee",
+        "Employee as Account": "Employee name appears as an account holder being referred",
+        "Ring Detection": "Multiple employees referring in a circular pattern",
+        "Reciprocal Pair": "Two people referring each other back and forth",
+    }
+
+    rule_counts = defaultdict(int)
+    for f in gaming:
+        rule_counts[f.rule_name] += 1
+
+    row += 1
+    for rule_name in EMPLOYEE_GAMING_RULES:
+        count = rule_counts.get(rule_name, 0)
+        ws.cell(row=row, column=1, value=rule_name)
+        ws.cell(row=row, column=2, value=count)
+        ws.cell(row=row, column=3, value=rule_explanations.get(rule_name, ""))
+        row += 1
+
+    gaming_rows = set()
+    for f in gaming:
+        gaming_rows.update(f.row_numbers)
+    row += 1
+    ws.cell(row=row, column=1, value="Total rows flagged for employee gaming:").font = HEADER_FONT
+    ws.cell(row=row, column=2, value=len(gaming_rows))
+    row += 1
+    ws.cell(row=row, column=1, value="Estimated exposure:").font = HEADER_FONT
+    ws.cell(row=row, column=2, value=f"${len(gaming_rows) * dollar:,.0f}")
+
+    # Detail rows
+    row += 2
+    ws.cell(row=row, column=1, value="Detail").font = Font(bold=True, size=12)
+    row += 1
+    detail_headers = ["Row", "Rule", "Severity", "Referrer", "Manager", "Branch", "Description"]
+    for col, header in enumerate(detail_headers, 1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = HEADER_FONT_WHITE
+        cell.fill = HEADER_FILL
+
+    row += 1
+    for f in sorted(gaming, key=lambda x: ({"critical": 0, "high": 1, "medium": 2, "low": 3}.get(x.severity, 4))):
+        for row_num in f.row_numbers[:5]:
+            ws.cell(row=row, column=1, value=row_num)
+            ws.cell(row=row, column=2, value=f.rule_name)
+            sev_cell = ws.cell(row=row, column=3, value=f.severity.upper())
+            sev_cell.fill = SEVERITY_FILLS.get(f.severity, PatternFill())
+            ws.cell(row=row, column=4, value=f.referrer)
+            ws.cell(row=row, column=5, value=f.manager)
+            ws.cell(row=row, column=6, value=f.branch)
+            ws.cell(row=row, column=7, value=f.description)
+            row += 1
+
+    _auto_width(ws)
 
 
 def _write_referrer_scorecard(ws, scores, config):
@@ -226,11 +325,13 @@ def _write_branch_scorecard(ws, scores, config):
 
 
 def _write_flagged_records(ws, findings):
+    # Only show medium severity and above to reduce noise
+    filtered = [f for f in findings if f.severity in ("critical", "high", "medium")]
     headers = ["Row", "Rule", "Severity", "Referrer", "Manager", "Branch", "Description"]
     _add_header_row(ws, headers)
 
     row_idx = 2
-    for f in sorted(findings, key=lambda x: ({"critical": 0, "high": 1, "medium": 2, "low": 3}.get(x.severity, 4))):
+    for f in sorted(filtered, key=lambda x: ({"critical": 0, "high": 1, "medium": 2}.get(x.severity, 3))):
         for row_num in f.row_numbers[:5]:
             ws.cell(row=row_idx, column=1, value=row_num)
             ws.cell(row=row_idx, column=2, value=f.rule_name)

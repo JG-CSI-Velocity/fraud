@@ -16,10 +16,10 @@ rules:
     description: "Same referrer, same day, high volume"
 
   surname_match:
-    enabled: true
+    enabled: false
     weight: 3
     min_surname_length: 3
-    description: "Referrer and account holder share last name"
+    description: "Referrer and account holder share last name (disabled: expected in referral programs)"
 
   duplicate_account:
     enabled: true
